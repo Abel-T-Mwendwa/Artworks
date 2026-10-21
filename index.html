@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#12284c">
+  <title>Promo Kings | Artwork Tracker</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/polish.css">
+</head>
+<body class="login-page">
+  <main class="login-card">
+    <img class="login-logo" src="images/promo-kings-logo%20(2).svg" alt="Promo Kings logo">
+    <h1>Artwork tracker</h1>
+    <p class="muted">Sign in with username</p>
+    <form id="login-form">
+      <label>Username<input name="username" autocomplete="username" required autofocus></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="primary full-width" type="submit">Sign in</button>
+    </form>
+    <p id="login-message" class="form-message" role="status"></p>
+  </main>
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="js/login.js"></script>
+</body>
+</html>

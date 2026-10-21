@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sales | Promo Kings Artwork Tracker</title><link rel="icon" href="images/promo-kings-logo.svg"><link rel="stylesheet" href="css/styles.css"><link rel="stylesheet" href="css/polish.css">
+</head>
+<body>
+  <header class="topbar"><a class="wordmark" href="sales.html" aria-label="Promo Kings home"><img class="company-logo" src="images/promo-kings-logo.svg" alt="Promo Kings logo" hidden></a><button class="mobile-menu-button" type="button" data-menu-toggle aria-expanded="false">Menu</button><div class="top-actions"><span id="current-user"></span><button class="quiet" data-logout>Log out</button></div></header>
+  <main class="page">
+    <div class="page-heading"><div><p class="eyebrow">SALES WORKSPACE</p><h1>Artwork requests</h1><p class="muted">Track artwork and request changes from your team.</p></div></div>
+    <section class="panel">
+      <div class="section-heading"><h2>My activity</h2><label class="inline-label">Period<select id="sales-period"><option value="day">Day</option><option value="month">Month</option><option value="year">Year</option></select></label></div>
+      <div id="sales-tallies" class="stats-grid"></div>
+    </section>
+    <section class="panel">
+      <div class="section-heading"><h2>Requests</h2><button class="primary" id="new-request">+ New request</button></div>
+      <div id="request-editor"></div>
+      <div class="toolbar"><input id="sales-search" placeholder="Search ref no or client"><select id="sales-status"><option value="">All statuses</option><option>Requested</option><option>In progress</option><option>Change requested</option><option>Done</option></select></div>
+      <div class="table-wrap"><table><thead><tr><th>SR</th><th>Month</th><th>Date</th><th>Ref no</th><th>Salesperson</th><th>Client</th><th>Product</th><th>Mode of branding</th><th>Logo and position</th><th>Branding size</th><th>Needed</th><th>Designer</th><th>Status</th><th>Actions</th></tr></thead><tbody id="sales-rows"></tbody></table></div>
+      <p id="sales-empty" class="empty-state hidden">No matching artwork requests yet.</p>
+    </section>
+  </main>
+  <dialog id="change-dialog"><form id="change-form" method="dialog"><div class="section-heading"><h2>Request a change</h2><button type="button" class="icon-button" data-close-dialog aria-label="Close">×</button></div><input type="hidden" name="artwork_id"><label>Change required<textarea name="change_text" rows="4" required></textarea></label><div class="form-grid"><label>Requested by<input name="requested_by" required></label><label>Date<input name="requested_on" type="date" required></label></div><div class="dialog-actions"><button type="button" class="quiet" data-close-dialog>Cancel</button><button class="primary" type="submit">Save change</button></div></form></dialog>
+  <dialog id="history-dialog"><div class="section-heading"><h2>Change history</h2><button class="icon-button" data-close-dialog aria-label="Close">×</button></div><div id="history-content"></div></dialog>
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
+  <script src="config.js"></script><script src="js/logo.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script type="module" src="js/app.js"></script>
+</body>
+</html>
