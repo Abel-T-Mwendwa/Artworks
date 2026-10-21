@@ -88,8 +88,8 @@ Do not open `index.html` as a `file://` URL; browser module loading and Supabase
 3. In GitHub, open **Settings → Pages**, choose **Deploy from a branch**, select the branch and `/ (root)`, then save.
 4. Visit `https://YOUR_GITHUB_USER.github.io/YOUR_REPOSITORY/` and sign in with:
 
-   - Username: `IT` (case-insensitive)
-   - Initial password: `#Promoadm1n`
+   - Username: `admin` (case-insensitive)
+   - Initial password: `<initial password>`
 
 5. Complete the forced password change. The new password is encrypted in `user_credentials`; only an active admin can request a view, and every view is written to `audit_log`.
 6. Add designer and salesperson accounts from **User management**. Give each user their temporary password securely; every new or reset account must change it at first login.
