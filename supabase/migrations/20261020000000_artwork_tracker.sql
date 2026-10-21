@@ -657,7 +657,7 @@ begin
       confirmation_token, recovery_token, email_change_token_new, email_change
     ) values (
       v_admin_id, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-      v_email, extensions.crypt('#Promoadm1n', extensions.gen_salt('bf')), now(),
+      v_email, extensions.crypt('********', extensions.gen_salt('bf')), now(),
       '{"provider":"email","providers":["email"]}'::jsonb,
       '{"username":"IT","full_name":"Promo Kings Administrator","role":"admin","password_change_required":true}'::jsonb,
       now(), now(), '', '', '', ''
