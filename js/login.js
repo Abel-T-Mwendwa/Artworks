@@ -39,9 +39,13 @@ function sessionIsWithinLimit() {
   }
 }
 
-async function routeSession() {
-  const { data: { session }, error: sessionError } = await client.auth.getSession();
-  if (sessionError) throw sessionError;
+async function routeSession(activeSession = null) {
+  let session = activeSession;
+  if (!session) {
+    const { data, error: sessionError } = await client.auth.getSession();
+    if (sessionError) throw sessionError;
+    session = data.session;
+  }
   if (!session) {
     clearLoginAt();
     return;
@@ -89,11 +93,13 @@ form.addEventListener("submit", async (event) => {
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Unable to sign in.");
-    const { error } = await client.auth.setSession({
+    clearLoginAt();
+    const { data: sessionData, error } = await client.auth.setSession({
       access_token: result.session.access_token,
       refresh_token: result.session.refresh_token
     });
     if (error) throw error;
+    if (!sessionData.session) throw new Error("The new session could not be restored. Please try again.");
     try {
       localStorage.setItem(LOGIN_AT_KEY, String(Date.now()));
     } catch (storageError) {
@@ -102,7 +108,7 @@ form.addEventListener("submit", async (event) => {
       if (signOutError) console.error("Could not sign out after a session storage failure.", signOutError);
       throw new Error("Your browser could not save the session. Enable local storage and try again.");
     }
-    await routeSession();
+    await routeSession(sessionData.session);
   } catch (error) {
     message.textContent = error.message || "Sign-in failed. Check your username and password.";
   } finally {

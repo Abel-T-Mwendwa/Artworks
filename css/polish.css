@@ -344,6 +344,105 @@ textarea:focus {
   min-height: 44px;
 }
 
+.branding-detail-row {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fbfaff;
+}
+
+.branding-detail-row h3 {
+  margin: 0;
+  color: var(--navy);
+  font-size: 14px;
+}
+
+.branding-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-column: 1 / -1;
+  gap: 8px;
+}
+
+.branding-detail-grid label {
+  min-width: 0;
+  font-size: 13px;
+}
+
+.branding-detail-row input,
+.branding-detail-row select,
+.branding-detail-row button {
+  min-height: 38px;
+  padding: 7px 9px;
+  font-size: 13px;
+}
+
+.branding-detail-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.branding-editor-dialog {
+  width: min(1100px, 95vw);
+  max-width: 95vw;
+}
+
+.branding-detail-row h3 {
+  grid-column: 1;
+}
+
+.branding-detail-row > button {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.sortable-header {
+  cursor: pointer;
+}
+
+.done-time-trigger {
+  cursor: pointer;
+}
+
+.done-time-popover {
+  position: fixed;
+  z-index: 1000;
+  max-width: min(240px, calc(100vw - 16px));
+  padding: 10px 13px;
+  border: 1px solid #cfc3f7;
+  border-radius: 9px;
+  background: #f4efff;
+  color: #39266d;
+  box-shadow: 0 5px 18px #30205f30;
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.branding-detail-view {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fbfaff;
+}
+
+.branding-detail-view p {
+  margin: 5px 0;
+  overflow-wrap: anywhere;
+}
+
+.assignment-notice {
+  background: #eaf1fd;
+  color: #2154a3;
+}
+
+.assignment-badge {
+  margin-top: 5px;
+  background: #eaf1fd;
+  color: #2154a3;
+}
+
 .line-view-item {
   overflow-wrap: anywhere;
   padding: 11px 12px;
@@ -379,6 +478,10 @@ dialog {
 }
 
 @media (max-width: 780px) {
+  .branding-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .topbar {
     height: auto;
     min-height: 64px;
@@ -525,6 +628,10 @@ dialog {
   }
 
   .line-editor-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .branding-detail-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 

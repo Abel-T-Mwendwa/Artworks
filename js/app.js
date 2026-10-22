@@ -13,6 +13,21 @@ let allRows = [];
 let allChanges = [];
 let users = [];
 let endingSession = false;
+const SORT_STATE_KEY = `artworkSort:${page}`;
+const SORT_KEYS = ["sr", "created_month", "created_at", "ref_no"];
+function readSortState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SORT_STATE_KEY) || "null");
+    return saved && SORT_KEYS.includes(saved.key) && ["asc", "desc"].includes(saved.direction) ? saved : null;
+  } catch (error) {
+    console.error("Could not read the table sort preference.", error);
+    return null;
+  }
+}
+const savedSortState = readSortState();
+let activeSort = savedSortState || { key: "sr", direction: "asc" };
+let userSortKey = savedSortState?.key || null;
+let donePopoverTrigger = null;
 
 function toast(message, type = "success") {
   const root = document.querySelector("#toast-root");
@@ -29,14 +44,24 @@ function escapeHtml(value) {
   })[character]);
 }
 
-const lineFieldNames = ["product", "branding_mode", "logo_position"];
+const lineFieldNames = ["product"];
 const lineFieldTitles = {
-  product: "Product with code and colour",
-  branding_mode: "Mode of branding",
-  logo_position: "Logo to use and branding position"
+  product: "Product with code and colour"
 };
+const brandingModes = [
+  "Embroidery",
+  "Screen printing",
+  "Digital printing",
+  "Sublimation",
+  "DTF",
+  "Embroidery/sublimation",
+  "Large Format"
+];
 let lineDialog;
 let lineDialogState;
+let brandingDialog;
+let brandingDialogState;
+let assignmentNotifications = [];
 
 function linesFromValue(value) {
   const values = Array.isArray(value) ? value : typeof value === "string" && value ? [value] : [];
@@ -229,6 +254,285 @@ document.addEventListener("click", (event) => {
 
 makeLineDialog();
 
+function normalizeBrandingDetails(value) {
+  let details = value;
+  if (typeof details === "string") {
+    try {
+      details = JSON.parse(details);
+    } catch {
+      details = [];
+    }
+  }
+  if (!Array.isArray(details)) return [];
+  return details.filter((line) => line && typeof line === "object" && !Array.isArray(line)).map((line) => ({
+    logo: String(line.logo ?? ""),
+    mode: String(line.mode ?? ""),
+    pantone: String(line.pantone ?? ""),
+    size: String(line.size ?? ""),
+    position: String(line.position ?? "")
+  }));
+}
+
+function brandingLineSummary(line) {
+  return [line.mode, line.logo, line.pantone, line.size, line.position].filter(Boolean).join(" · ");
+}
+
+function brandingSummary(details) {
+  const lines = normalizeBrandingDetails(details);
+  const first = lines.length ? brandingLineSummary(lines[0]) : "";
+  return `${first || "Click to add"}${lines.length > 1 ? ` +${lines.length - 1} more` : ""}`;
+}
+
+function brandingFieldMarkup(value, { mode = "edit", recordId = "", direct = false } = {}) {
+  const details = normalizeBrandingDetails(value);
+  const payload = escapeHtml(JSON.stringify(details));
+  return `<div class="branding-field-group">
+    <input type="hidden" name="branding_details" value="${payload}">
+    <button type="button" class="line-field-box" data-branding-field data-branding-value="${payload}" data-branding-mode="${mode}" data-branding-record="${escapeHtml(recordId)}" data-branding-direct="${direct}" aria-haspopup="dialog" aria-required="${mode === "edit"}" aria-label="Branding: ${escapeHtml(brandingSummary(details))}">${escapeHtml(brandingSummary(details))}</button>
+  </div>`;
+}
+
+function makeBrandingDialog() {
+  brandingDialog = document.createElement("dialog");
+  brandingDialog.id = "branding-editor-dialog";
+  brandingDialog.className = "line-editor-dialog branding-editor-dialog";
+  brandingDialog.innerHTML = `<div class="line-dialog-content">
+    <div class="section-heading"><h2 id="branding-dialog-title">Branding</h2><button type="button" class="icon-button" data-branding-close aria-label="Close">×</button></div>
+    <div id="branding-dialog-list" class="line-dialog-list"></div>
+    <p id="branding-dialog-message" class="form-message" role="alert"></p>
+    <div class="dialog-actions" id="branding-dialog-actions"></div>
+  </div>`;
+  document.body.append(brandingDialog);
+  brandingDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    discardBrandingDialog();
+  });
+  brandingDialog.addEventListener("click", (event) => {
+    if (event.target === brandingDialog) discardBrandingDialog();
+  });
+  brandingDialog.querySelector("[data-branding-close]").addEventListener("click", () => {
+    if (brandingDialogState?.mode === "view") closeBrandingDialog();
+    else discardBrandingDialog();
+  });
+}
+
+function renderBrandingDialog() {
+  const { details, mode } = brandingDialogState;
+  const editable = mode === "edit";
+  brandingDialog.querySelector("[data-branding-close]").classList.toggle("hidden", !editable);
+  const list = brandingDialog.querySelector("#branding-dialog-list");
+  list.replaceChildren();
+  details.forEach((detail, index) => {
+    if (!editable) {
+      const item = document.createElement("section");
+      item.className = "branding-detail-view";
+      const fields = [
+        ["Logo to use", detail.logo],
+        ["Mode of branding", detail.mode],
+        ["Pantone code", detail.pantone],
+        ["Size", detail.size],
+        ["Position", detail.position]
+      ];
+      item.innerHTML = fields.filter(([, value]) => value).map(([label, value]) =>
+        `<p><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</p>`).join("") || "<p>No branding details saved.</p>";
+      list.append(item);
+      return;
+    }
+
+    const row = document.createElement("section");
+    row.className = "branding-detail-row";
+    const heading = document.createElement("h3");
+    heading.textContent = `Branding line ${index + 1}`;
+    const grid = document.createElement("div");
+    grid.className = "branding-detail-grid";
+
+    const textFields = [
+      ["logo", "Logo to use"],
+      ["pantone", "Pantone code"],
+      ["size", "Size"],
+      ["position", "Position"]
+    ];
+    const controls = new Map();
+    textFields.forEach(([key, label]) => {
+      const wrapper = document.createElement("label");
+      wrapper.textContent = label;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.maxLength = 200;
+      input.value = detail[key];
+      input.setAttribute("aria-label", `${label}, branding line ${index + 1}`);
+      input.addEventListener("input", () => { detail[key] = input.value; });
+      wrapper.append(input);
+      controls.set(key, input);
+      grid.append(wrapper);
+    });
+
+    const modeLabel = document.createElement("label");
+    modeLabel.textContent = "Mode of branding";
+    const select = document.createElement("select");
+    select.required = true;
+    select.setAttribute("aria-label", `Mode of branding, line ${index + 1}`);
+    select.append(new Option("Select a mode…", ""));
+    if (detail.mode && !brandingModes.includes(detail.mode)) {
+      const legacyOption = new Option(`Previous value: ${detail.mode}`, detail.mode);
+      legacyOption.hidden = true;
+      select.append(legacyOption);
+    }
+    brandingModes.forEach((value) => select.append(new Option(value, value)));
+    select.value = detail.mode;
+    select.addEventListener("change", () => { detail.mode = select.value; });
+    modeLabel.append(select);
+    grid.insertBefore(modeLabel, grid.children[1] || null);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "danger";
+    remove.textContent = "Remove line";
+    remove.addEventListener("click", () => {
+      if (brandingDialogState.details.length === 1) {
+        brandingDialogState.details[0] = { logo: "", mode: "", pantone: "", size: "", position: "" };
+      } else {
+        brandingDialogState.details.splice(index, 1);
+      }
+      renderBrandingDialog();
+      const next = list.querySelectorAll(".branding-detail-row")[Math.min(index, brandingDialogState.details.length - 1)];
+      next?.querySelector("input, select")?.focus();
+    });
+    row.append(heading, grid, remove);
+    list.append(row);
+    controls.get("logo")?.setAttribute("autocomplete", "off");
+  });
+
+  const actions = brandingDialog.querySelector("#branding-dialog-actions");
+  actions.replaceChildren();
+  if (!editable) {
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "primary";
+    close.textContent = "Close";
+    close.addEventListener("click", closeBrandingDialog);
+    actions.append(close);
+    return;
+  }
+
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "secondary";
+  add.textContent = "Add line";
+  add.addEventListener("click", () => {
+    brandingDialogState.details.push({ logo: "", mode: "", pantone: "", size: "", position: "" });
+    renderBrandingDialog();
+    list.lastElementChild?.querySelector("input, select")?.focus();
+  });
+  const discard = document.createElement("button");
+  discard.type = "button";
+  discard.className = "quiet";
+  discard.textContent = "Discard changes";
+  discard.addEventListener("click", discardBrandingDialog);
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "primary";
+  save.textContent = "Save changes";
+  save.addEventListener("click", () => { void saveBrandingDialog(); });
+  actions.append(add, discard, save);
+}
+
+function openBrandingDialog(trigger) {
+  let details;
+  try {
+    details = normalizeBrandingDetails(JSON.parse(trigger.dataset.brandingValue || "[]"));
+  } catch {
+    toast("Could not read these branding details.", "error");
+    return;
+  }
+  const editable = trigger.dataset.brandingMode !== "view";
+  const lines = details.length ? details : [{ logo: "", mode: "", pantone: "", size: "", position: "" }];
+  brandingDialogState = {
+    trigger,
+    mode: editable ? "edit" : "view",
+    direct: trigger.dataset.brandingDirect === "true",
+    recordId: trigger.dataset.brandingRecord,
+    initialDetails: lines.map((line) => ({ ...line })),
+    details: lines.map((line) => ({ ...line }))
+  };
+  brandingDialog.querySelector("#branding-dialog-message").textContent = "";
+  renderBrandingDialog();
+  brandingDialog.showModal();
+  (editable
+    ? brandingDialog.querySelector("#branding-dialog-list input, #branding-dialog-list select")
+    : brandingDialog.querySelector("#branding-dialog-actions button"))?.focus();
+}
+
+function brandingDialogHasChanges() {
+  return JSON.stringify(brandingDialogState.details) !== JSON.stringify(brandingDialogState.initialDetails);
+}
+
+function closeBrandingDialog() {
+  const trigger = brandingDialogState?.trigger;
+  brandingDialog.close();
+  brandingDialogState = null;
+  if (trigger?.isConnected) trigger.focus();
+}
+
+function discardBrandingDialog() {
+  if (!brandingDialogState) return;
+  if (brandingDialogState.mode === "edit" && brandingDialogHasChanges()
+    && !window.confirm("Discard the unsaved branding changes?")) return;
+  closeBrandingDialog();
+}
+
+async function saveBrandingDialog() {
+  const state = brandingDialogState;
+  const message = brandingDialog.querySelector("#branding-dialog-message");
+  const details = state.details.map((line) => Object.fromEntries(
+    Object.entries(line).map(([key, value]) => [key, String(value).trim()])
+  ));
+  const nonEmpty = details.filter((line) => Object.values(line).some(Boolean));
+  if (!nonEmpty.length) {
+    message.textContent = "Add at least one branding line and choose a mode.";
+    return;
+  }
+  const invalid = nonEmpty.find((line) => !line.mode);
+  if (invalid) {
+    message.textContent = "Choose a mode of branding for every non-empty line.";
+    const index = details.indexOf(invalid);
+    brandingDialog.querySelectorAll(".branding-detail-row select")[index]?.focus();
+    return;
+  }
+  if (nonEmpty.some((line) => Object.values(line).some((value) => value.length > 200))) {
+    message.textContent = "Branding text must be 200 characters or fewer per field.";
+    return;
+  }
+  if (state.direct) {
+    try {
+      const { data, error } = await client.from("artwork_requests").update({ branding_details: nonEmpty })
+        .eq("id", state.recordId).select("id").maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("This request can no longer be edited. Refresh the page and try again.");
+      const row = allRows.find((item) => item.id === state.recordId);
+      if (row) row.branding_details = nonEmpty;
+      toast("Branding details updated.");
+    } catch (error) {
+      message.textContent = error.message || "Could not save branding details.";
+      return;
+    }
+  }
+  const group = state.trigger.closest(".branding-field-group");
+  const hidden = group?.querySelector('input[type="hidden"]');
+  if (hidden) hidden.value = JSON.stringify(nonEmpty);
+  state.trigger.dataset.brandingValue = JSON.stringify(nonEmpty);
+  state.trigger.textContent = brandingSummary(nonEmpty);
+  state.trigger.setAttribute("aria-label", `Branding: ${brandingSummary(nonEmpty)}`);
+  closeBrandingDialog();
+}
+
+document.addEventListener("click", (event) => {
+  const trigger = event.target.closest("[data-branding-field]");
+  if (trigger) openBrandingDialog(trigger);
+});
+
+makeBrandingDialog();
+
 function storedLoginAt() {
   try {
     const timestamp = Number(localStorage.getItem(LOGIN_AT_KEY));
@@ -283,6 +587,55 @@ function localDateTime(value) {
   return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Nairobi" }).format(new Date(value));
 }
 
+function sortRows(rows) {
+  const direction = activeSort.direction === "asc" ? 1 : -1;
+  return [...rows].sort((left, right) => {
+    let comparison = 0;
+    if (activeSort.key === "sr") {
+      comparison = Number(left.sr) - Number(right.sr);
+    } else if (activeSort.key === "created_month") {
+      comparison = String(left.created_month || "").localeCompare(String(right.created_month || ""));
+    } else if (activeSort.key === "created_at") {
+      comparison = new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
+    } else if (activeSort.key === "ref_no") {
+      comparison = String(left.ref_no || "").localeCompare(String(right.ref_no || ""), undefined, { numeric: true, sensitivity: "base" });
+    }
+    return comparison * direction;
+  });
+}
+
+function updateSortIndicators() {
+  document.querySelectorAll("th[data-sort]").forEach((header) => {
+    const label = header.dataset.sortLabel || header.textContent.trim();
+    header.dataset.sortLabel = label;
+    header.title = "Double-click to sort";
+    header.classList.add("sortable-header");
+    const active = header.dataset.sort === activeSort.key;
+    header.textContent = `${label}${active ? (activeSort.direction === "asc" ? " ▲" : " ▼") : ""}`;
+    header.setAttribute("aria-sort", active ? (activeSort.direction === "asc" ? "ascending" : "descending") : "none");
+  });
+}
+
+function bindSortableHeaders() {
+  document.querySelectorAll("th[data-sort]").forEach((header) => {
+    header.addEventListener("dblclick", () => {
+      activeSort = userSortKey === header.dataset.sort
+        ? { key: activeSort.key, direction: activeSort.direction === "asc" ? "desc" : "asc" }
+        : { key: header.dataset.sort, direction: "asc" };
+      userSortKey = header.dataset.sort;
+      try {
+        localStorage.setItem(SORT_STATE_KEY, JSON.stringify(activeSort));
+      } catch (error) {
+        console.error("Could not save the table sort preference.", error);
+      }
+      if (page === "sales.html") renderSales();
+      else if (page === "designer.html") void renderDesigner();
+      else if (page === "admin.html") renderAdminRows();
+    });
+  });
+  updateSortIndicators();
+}
+
 function statusBadge(status) {
   const className = status === "Done" ? "done" : status === "In progress" ? "progress" : status === "Change requested" ? "change" : "requested";
   return `<span class="badge ${className}">${escapeHtml(status)}</span>`;
@@ -290,6 +643,10 @@ function statusBadge(status) {
 
 function profileName(id) {
   return users.find((user) => user.id === id)?.full_name || users.find((user) => user.id === id)?.username || "Any";
+}
+
+function preferredDesignerName(row) {
+  return row.preferred_designer_recorded === false ? "Not recorded" : profileName(row.preferred_designer);
 }
 
 function setBusy(button, busy, label) {
@@ -342,7 +699,7 @@ async function loadUsers() {
 }
 
 async function loadArtworks() {
-  const { data, error } = await client.from("artwork_requests").select("*").order("date_needed").order("created_at", { ascending: false });
+  const { data, error } = await client.from("artwork_requests").select("*").order("sr", { ascending: true });
   if (error) throw error;
   allRows = data || [];
   if (allRows.length) {
@@ -376,6 +733,7 @@ function tallyMarkup(items) {
 async function initSales() {
   document.querySelector("#current-user").textContent = profile.full_name;
   const [rows, loadedUsers] = await Promise.all([loadArtworks(), loadUsers()]);
+  bindSortableHeaders();
   renderSalesTallies();
   renderSales();
   document.querySelector("#sales-period").addEventListener("change", renderSalesTallies);
@@ -384,6 +742,12 @@ async function initSales() {
   document.querySelector("#new-request").addEventListener("click", () => openRequestEditor());
   document.querySelector("#change-form").addEventListener("submit", saveChange);
   document.querySelectorAll("[data-close-dialog]").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
+  document.addEventListener("click", (event) => {
+    if (donePopoverTrigger && !event.target.closest("#done-time-popover, .done-time-trigger")) closeDonePopover();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeDonePopover();
+  });
   subscribeToChanges();
   void loadedUsers;
 }
@@ -403,48 +767,87 @@ function renderSalesTallies() {
 }
 
 function renderSales() {
+  closeDonePopover();
   const search = document.querySelector("#sales-search").value.trim().toLowerCase();
   const status = document.querySelector("#sales-status").value;
-  const rows = allRows.filter((row) => row.created_by === profile.id
+  const rows = sortRows(allRows.filter((row) => row.created_by === profile.id
     && (!status || row.status === status)
-    && (!search || `${row.ref_no} ${row.client_name}`.toLowerCase().includes(search)));
+    && (!search || `${row.ref_no} ${row.client_name}`.toLowerCase().includes(search))));
   const tbody = document.querySelector("#sales-rows");
   tbody.innerHTML = rows.map((row) => `<tr>
     <td>${escapeHtml(row.sr)}</td><td>${escapeHtml(row.created_month)}</td><td>${localDate(row.created_at)}</td>
     <td><strong>${escapeHtml(row.ref_no)}</strong></td><td>${escapeHtml(profile.full_name)}</td><td>${escapeHtml(row.client_name)}</td>
     <td>${lineFieldMarkup("product", row.product, { mode: row.status === "Requested" ? "edit" : "view", recordId: row.id, direct: row.status === "Requested" })}</td>
-    <td>${lineFieldMarkup("branding_mode", row.branding_mode, { mode: row.status === "Requested" ? "edit" : "view", recordId: row.id, direct: row.status === "Requested" })}</td>
-    <td>${lineFieldMarkup("logo_position", row.logo_position, { mode: row.status === "Requested" ? "edit" : "view", recordId: row.id, direct: row.status === "Requested" })}</td>
-    <td>${escapeHtml(row.branding_size)}</td><td>${localDate(row.date_needed)}</td><td>${escapeHtml(profileName(row.assigned_designer))}</td>
-    <td>${statusBadge(row.status)}${row.status === "Done" ? ' <span title="Designer marked this done">✓</span>' : ""}</td>
+    <td>${brandingFieldMarkup(row.branding_details, { mode: row.status === "Requested" ? "edit" : "view", recordId: row.id, direct: row.status === "Requested" })}</td>
+    <td>${localDate(row.date_needed)}</td><td>${escapeHtml(preferredDesignerName(row))}</td>
+    <td>${row.status === "Done" ? `<button type="button" class="badge done done-time-trigger" data-done-time="${escapeHtml(row.completed_at || "")}" aria-expanded="false" aria-label="Done status, show completion time">Done</button> <span title="Designer marked this done">✓</span>` : statusBadge(row.status)}</td>
+    <td>${row.status === "Done" && row.completed_at ? escapeHtml(localDateTime(row.completed_at)) : "—"}</td>
     <td><div class="table-actions">
       <button class="secondary" data-history="${escapeHtml(row.id)}">History</button>
       <button class="secondary" data-change="${escapeHtml(row.id)}">Change</button>
       <button class="quiet" data-edit="${escapeHtml(row.id)}" ${row.status !== "Requested" ? "disabled" : ""}>Edit</button>
     </div></td></tr>`).join("");
   document.querySelector("#sales-empty").classList.toggle("hidden", rows.length > 0);
+  updateSortIndicators();
+  tbody.querySelectorAll("[data-done-time]").forEach((button) => button.addEventListener("click", () => {
+    openDonePopover(button, button.dataset.doneTime);
+  }));
   tbody.querySelectorAll("[data-edit]").forEach((button) => button.addEventListener("click", () => openRequestEditor(allRows.find((row) => row.id === button.dataset.edit))));
   tbody.querySelectorAll("[data-change]").forEach((button) => button.addEventListener("click", () => openChangeDialog(allRows.find((row) => row.id === button.dataset.change))));
   tbody.querySelectorAll("[data-history]").forEach((button) => button.addEventListener("click", () => showHistory(button.dataset.history)));
 }
 
+function closeDonePopover() {
+  document.querySelector("#done-time-popover")?.remove();
+  donePopoverTrigger?.setAttribute("aria-expanded", "false");
+  donePopoverTrigger = null;
+}
+
+function openDonePopover(trigger, timestamp) {
+  if (donePopoverTrigger === trigger) {
+    closeDonePopover();
+    return;
+  }
+  closeDonePopover();
+  const date = timestamp
+    ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "Africa/Nairobi" }).format(new Date(timestamp))
+    : "—";
+  const time = timestamp
+    ? new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Nairobi" }).format(new Date(timestamp))
+    : "—";
+  const popover = document.createElement("div");
+  popover.id = "done-time-popover";
+  popover.className = "done-time-popover";
+  popover.setAttribute("role", "tooltip");
+  popover.textContent = `Done on ${date} at ${time}`;
+  document.body.append(popover);
+  const bounds = trigger.getBoundingClientRect();
+  const left = Math.min(Math.max(8, bounds.left), window.innerWidth - 248);
+  popover.style.left = `${left}px`;
+  popover.style.top = `${Math.min(bounds.bottom + 8, window.innerHeight - 56)}px`;
+  trigger.setAttribute("aria-expanded", "true");
+  donePopoverTrigger = trigger;
+}
+
 function requestFormMarkup(row = null) {
   const editing = Boolean(row);
-  const designers = users.filter((user) => user.role === "designer" && user.active).map((user) => `<option value="${escapeHtml(user.id)}" ${row?.assigned_designer === user.id ? "selected" : ""}>${escapeHtml(user.full_name)}</option>`).join("");
+  const activeDesigners = users.filter((user) => user.role === "designer" && user.active);
+  const inactivePreferred = row?.preferred_designer && !activeDesigners.some((user) => user.id === row.preferred_designer)
+    ? users.find((user) => user.id === row.preferred_designer) : null;
+  const designers = (inactivePreferred
+    ? `<option value="${escapeHtml(inactivePreferred.id)}" selected>${escapeHtml(inactivePreferred.full_name)} (inactive)</option>` : "")
+    + activeDesigners.map((user) => `<option value="${escapeHtml(user.id)}" ${row?.preferred_designer === user.id ? "selected" : ""}>${escapeHtml(user.full_name)}</option>`).join("");
   return `<form id="request-form" class="request-form"><div class="form-grid">
     <label>Category<select name="category" required><option value="">Select…</option><option ${row?.category === "New client" ? "selected" : ""}>New client</option><option ${row?.category === "Old client" ? "selected" : ""}>Old client</option></select></label>
     <label>Client name<input name="client_name" value="${escapeHtml(row?.client_name)}" required></label>
     <label>SO number<input name="so_number" value="${escapeHtml(row?.so_number)}" required></label>
     <div class="line-field-label"><span>Product with code and colour</span>${lineFieldMarkup("product", row?.product)}</div>
-    <div class="line-field-label"><span>Mode of branding</span>${lineFieldMarkup("branding_mode", row?.branding_mode)}</div>
-    <div class="line-field-label"><span>Logo to use and branding position</span>${lineFieldMarkup("logo_position", row?.logo_position)}</div>
-    <label>Pantone code<input name="pantone_code" value="${escapeHtml(row?.pantone_code)}"></label>
-    <label>Size of branding required<input name="branding_size" value="${escapeHtml(row?.branding_size)}" placeholder="e.g. 10 x 5 cm" maxlength="100" required></label>
+    <div class="line-field-label"><span>Branding</span>${brandingFieldMarkup(row?.branding_details)}</div>
     <label class="check-line"><input name="high_res_logo" type="checkbox" ${row?.high_res_logo ? "checked" : ""}> High resolution logo</label>
     <label class="check-line"><input name="redesign_logo" type="checkbox" ${row?.redesign_logo ? "checked" : ""}> Redesign logo</label>
     <label class="wide">Additional information<textarea name="additional_info" rows="2">${escapeHtml(row?.additional_info)}</textarea></label>
     <label>Date needed<input name="date_needed" type="date" min="${today}" value="${escapeHtml(row?.date_needed || "")}" required></label>
-    <label>Designer<select name="assigned_designer"><option value="">Any</option>${designers}</select></label>
+    <label>Designer preferred<select name="preferred_designer"><option value="">Any</option>${designers}</select></label>
   </div><div class="form-actions"><button type="button" class="quiet" id="discard-request">Discard</button><button class="primary" type="submit">${editing ? "Save changes" : "Save request"}</button></div></form>`;
 }
 
@@ -464,16 +867,22 @@ async function saveRequest(event, existing) {
   setBusy(button, true);
   try {
     const data = new FormData(form);
-    const values = Object.fromEntries(["category","client_name","so_number","pantone_code","branding_size","additional_info","date_needed","assigned_designer"].map((name) => [name, data.get(name) || null]));
+    const values = Object.fromEntries(["category","client_name","so_number","additional_info","date_needed"].map((name) => [name, data.get(name) || null]));
     for (const name of lineFieldNames) {
       const lines = linesFromValue(JSON.parse(data.get(name) || "[]"));
       if (!lines.length) throw new Error(`${lineFieldTitles[name]} must contain at least one non-empty line.`);
       values[name] = lines;
     }
-    values.branding_size = String(data.get("branding_size") || "").trim();
-    if (!values.branding_size || values.branding_size.length > 100) {
-      throw new Error("Enter a branding size of no more than 100 characters.");
+    const brandingDetails = normalizeBrandingDetails(data.get("branding_details"))
+      .map((line) => Object.fromEntries(Object.entries(line).map(([key, value]) => [key, String(value).trim()])));
+    if (!brandingDetails.length || brandingDetails.some((line) => !line.mode
+      || Object.values(line).some((value) => value.length > 200))) {
+      throw new Error("Add at least one branding line, choose a mode for each line, and keep each field to 200 characters or fewer.");
     }
+    values.branding_details = brandingDetails;
+    values.preferred_designer = data.get("preferred_designer") || null;
+    values.preferred_designer_recorded = true;
+    values.assigned_designer = values.preferred_designer;
     Object.assign(values, { high_res_logo: data.has("high_res_logo"), redesign_logo: data.has("redesign_logo") });
     if (values.date_needed < today) throw new Error("Date needed cannot be in the past.");
     let result;
@@ -535,7 +944,8 @@ async function showHistory(artworkId) {
 
 async function initDesigner() {
   document.querySelector("#current-user").textContent = profile.full_name;
-  await Promise.all([loadUsers(), loadArtworks()]);
+  await Promise.all([loadUsers(), loadArtworks(), loadAssignmentNotifications()]);
+  bindSortableHeaders();
   renderDesignerTallies();
   renderDesigner();
   document.querySelector("#designer-filter").addEventListener("change", renderDesigner);
@@ -543,11 +953,25 @@ async function initDesigner() {
     document.querySelector("#designer-filter").value = "changes";
     renderDesigner();
   });
+  document.querySelector("#assignment-bell").addEventListener("click", () => {
+    document.querySelector("#designer-filter").value = "assignments";
+    renderDesigner();
+  });
   subscribeToChanges();
 }
 
 function visibleDesignerRows() {
-  return allRows.filter((row) => row.assigned_designer === profile.id || row.assigned_designer === null);
+  return allRows;
+}
+
+async function loadAssignmentNotifications() {
+  const { data, error } = await client.from("designer_notifications")
+    .select("id,artwork_id,created_at")
+    .is("read_at", null)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  assignmentNotifications = data || [];
+  return assignmentNotifications;
 }
 
 async function changesFor(artworkIds) {
@@ -574,6 +998,7 @@ async function renderDesignerTallies() {
       ["Needed tomorrow", pending.filter((row) => row.date_needed === tomorrow()).length]
     ]);
     document.querySelector("#change-count").textContent = changes?.length || 0;
+    document.querySelector("#assignment-count").textContent = assignmentNotifications.length;
   } catch (error) {
     toast(error.message, "error");
   }
@@ -589,36 +1014,47 @@ async function renderDesigner() {
   try {
     const rows = visibleDesignerRows();
     const openChanges = await changesFor(rows.map((row) => row.id));
+    const assignedIds = new Set(assignmentNotifications.map((notice) => notice.artwork_id));
     const byArtwork = new Map();
     openChanges.forEach((change) => byArtwork.set(change.artwork_id, [...(byArtwork.get(change.artwork_id) || []), change]));
     const filter = document.querySelector("#designer-filter").value;
-    const filtered = rows.filter((row) => {
+    const filtered = sortRows(rows.filter((row) => {
       if (filter === "today") return row.date_needed === today;
       if (filter === "tomorrow") return row.date_needed === tomorrow();
       if (filter === "pending") return row.status !== "Done";
       if (filter === "done") return row.status === "Done";
       if (filter === "changes") return byArtwork.has(row.id);
+      if (filter === "assignments") return assignedIds.has(row.id) && row.assigned_designer === profile.id;
       return true;
-    }).sort((a, b) => String(a.date_needed).localeCompare(String(b.date_needed)));
+    }));
     const tbody = document.querySelector("#designer-rows");
     tbody.innerHTML = filtered.map((row) => {
       const changes = byArtwork.get(row.id) || [];
-      const otherDetails = [row.category, `SO ${row.so_number}`, row.pantone_code, row.branding_size, row.additional_info].filter(Boolean).map(escapeHtml).join(" · ");
+      const otherDetails = [row.category, `SO ${row.so_number}`, row.additional_info].filter(Boolean).map(escapeHtml).join(" · ");
       const claimed = row.assigned_designer === profile.id && row.status === "In progress";
-      const canStart = row.status !== "Done" && row.status !== "In progress";
+      const canStart = row.status !== "Done" && row.status !== "In progress"
+        && (row.assigned_designer === null || row.assigned_designer === profile.id);
       return `<tr><td><strong>${escapeHtml(row.ref_no)}</strong><br>${escapeHtml(row.client_name)}</td><td>
-        <div class="designer-line-fields">${lineFieldMarkup("product", row.product, { mode: "view" })}${lineFieldMarkup("branding_mode", row.branding_mode, { mode: "view" })}${lineFieldMarkup("logo_position", row.logo_position, { mode: "view" })}</div>
+        <div class="designer-line-fields">${lineFieldMarkup("product", row.product, { mode: "view" })}${brandingFieldMarkup(row.branding_details, { mode: "view" })}</div>
         <p>${otherDetails}</p></td>
-        <td>${localDate(row.date_needed)}</td><td>${escapeHtml(profileName(row.created_by))}</td><td>${statusBadge(row.status)}</td>
+        <td>${localDate(row.date_needed)}</td><td>${escapeHtml(profileName(row.created_by))}</td>
+        <td>${statusBadge(row.status)}</td>
         <td>${changes.map((change) => `<div class="change-item">${escapeHtml(change.change_text)}<small>${escapeHtml(change.requested_by)} · ${localDate(change.requested_on)}</small></div>`).join("") || "—"}</td>
         <td><textarea data-notes="${escapeHtml(row.id)}" rows="2" placeholder="Designer notes or final file URL" ${claimed ? "" : "disabled"}>${escapeHtml(row.designer_notes)}</textarea></td>
+        <td>${escapeHtml(preferredDesignerName(row))}${assignedIds.has(row.id) ? '<br><span class="badge assignment-badge">New assignment</span>' : ""}</td>
         <td><div class="table-actions">${canStart ? `<button class="primary" data-start="${escapeHtml(row.id)}">Start</button>` : ""}
         ${claimed && row.status !== "Done" ? `<button class="secondary" data-done="${escapeHtml(row.id)}">Done</button>` : ""}
         ${claimed ? `<button class="quiet" data-notes-save="${escapeHtml(row.id)}">Save notes</button>` : ""}</div></td></tr>`;
     }).join("");
     document.querySelector("#designer-empty").classList.toggle("hidden", filtered.length > 0);
+    updateSortIndicators();
     document.querySelector("#change-banner").classList.toggle("hidden", openChanges.length === 0);
     document.querySelector("#change-banner").textContent = openChanges.length ? `CHANGE REQUESTED · ${openChanges.length} change${openChanges.length === 1 ? "" : "s"} need attention` : "";
+    const assignmentBanner = document.querySelector("#assignment-banner");
+    assignmentBanner.classList.toggle("hidden", assignmentNotifications.length === 0);
+    assignmentBanner.textContent = assignmentNotifications.length
+      ? `NEW ASSIGNMENT · ${assignmentNotifications.length} request${assignmentNotifications.length === 1 ? "" : "s"} assigned specifically to you.`
+      : "";
     tbody.querySelectorAll("[data-start]").forEach((button) => button.addEventListener("click", () => updateArtwork(button.dataset.start, { status: "In progress", assigned_designer: profile.id }, button, "Job started.")));
     tbody.querySelectorAll("[data-done]").forEach((button) => button.addEventListener("click", () => updateArtwork(button.dataset.done, { status: "Done", done_at: new Date().toISOString(), done_by: profile.id }, button, "Artwork marked done.")));
     tbody.querySelectorAll("[data-notes-save]").forEach((button) => button.addEventListener("click", () => {
@@ -646,15 +1082,24 @@ async function updateArtwork(id, values, button, success) {
 }
 
 function subscribeToChanges() {
-  client.channel(`artwork-${profile.id}`).on("postgres_changes", { event: "*", schema: "public", table: "artwork_requests" }, () => {
+  const channel = client.channel(`artwork-${profile.id}`).on("postgres_changes", { event: "*", schema: "public", table: "artwork_requests" }, () => {
     void refreshArtworks();
   }).on("postgres_changes", { event: "*", schema: "public", table: "artwork_changes" }, () => {
     void refreshArtworks();
-  }).subscribe();
+  });
+  if (page === "designer.html") {
+    channel.on("postgres_changes", { event: "*", schema: "public", table: "designer_notifications" }, () => {
+      void refreshArtworks();
+    });
+  }
+  channel.subscribe();
 }
 
 async function refreshArtworks() {
-  await loadArtworks();
+  await Promise.all([
+    loadArtworks(),
+    page === "designer.html" ? loadAssignmentNotifications() : Promise.resolve()
+  ]);
   if (page === "sales.html") {
     renderSalesTallies();
     renderSales();
@@ -670,12 +1115,18 @@ async function refreshArtworks() {
 async function initAdmin() {
   document.querySelector("#current-user").textContent = profile.full_name;
   await Promise.all([loadUsers(), loadArtworks()]);
+  bindSortableHeaders();
   renderAdmin();
   document.querySelector("#admin-period").addEventListener("change", renderAdminTallies);
   ["filter-sales", "filter-designer", "filter-status", "filter-category", "filter-from", "filter-to", "admin-search"].forEach((id) => document.querySelector(`#${id}`).addEventListener("input", renderAdminRows));
   document.querySelector("#export-csv").addEventListener("click", exportCsv);
   document.querySelector("#user-create-form").addEventListener("submit", createUser);
   document.querySelector("#admin-edit-form").addEventListener("submit", saveAdminEdit);
+  document.querySelector("#admin-edit-form").elements.preferred_designer.addEventListener("change", (event) => {
+    if (event.currentTarget.value !== "__unknown") {
+      document.querySelector("#admin-edit-form").elements.assigned_designer.value = event.currentTarget.value;
+    }
+  });
   document.querySelector("#admin-delete").addEventListener("click", deleteArtwork);
   document.querySelector("#password-form").addEventListener("submit", resetPassword);
   bindPasswordHints(document);
@@ -708,7 +1159,7 @@ function filteredAdminRows() {
   const from = document.querySelector("#filter-from").value;
   const to = document.querySelector("#filter-to").value;
   return allRows.filter((row) => (!document.querySelector("#filter-sales").value || row.created_by === document.querySelector("#filter-sales").value)
-    && (!document.querySelector("#filter-designer").value || row.assigned_designer === document.querySelector("#filter-designer").value)
+    && (!document.querySelector("#filter-designer").value || row.preferred_designer === document.querySelector("#filter-designer").value)
     && (!document.querySelector("#filter-status").value || row.status === document.querySelector("#filter-status").value)
     && (!document.querySelector("#filter-category").value || row.category === document.querySelector("#filter-category").value)
     && (!from || dateKey(row.created_at) >= from) && (!to || dateKey(row.created_at) <= to)
@@ -718,14 +1169,14 @@ function filteredAdminRows() {
 function renderAdminRows() {
   const tbody = document.querySelector("#admin-rows");
   if (!tbody) return;
-  const rows = filteredAdminRows();
+  const rows = sortRows(filteredAdminRows());
   tbody.innerHTML = rows.map((row) => `<tr><td><strong>${escapeHtml(row.ref_no)}</strong></td><td>${escapeHtml(row.client_name)}<br><span class="muted">${escapeHtml(row.so_number)}</span></td>
-    <td>${escapeHtml(profileName(row.created_by))}</td><td>${escapeHtml(profileName(row.assigned_designer))}</td><td>${escapeHtml(row.category)}</td>
+    <td>${escapeHtml(profileName(row.created_by))}</td><td>${escapeHtml(preferredDesignerName(row))}</td><td>${escapeHtml(row.category)}</td>
     <td>${lineFieldMarkup("product", row.product, { recordId: row.id, direct: true })}</td>
-    <td>${lineFieldMarkup("branding_mode", row.branding_mode, { recordId: row.id, direct: true })}</td>
-    <td>${lineFieldMarkup("logo_position", row.logo_position, { recordId: row.id, direct: true })}</td><td>${escapeHtml(row.branding_size)}</td>
+    <td>${brandingFieldMarkup(row.branding_details, { recordId: row.id, direct: true })}</td>
     <td>${localDate(row.created_at)}</td><td>${localDate(row.date_needed)}</td><td>${statusBadge(row.status)}</td><td><button class="secondary" data-admin-edit="${escapeHtml(row.id)}">Edit</button></td></tr>`).join("");
   document.querySelector("#admin-empty").classList.toggle("hidden", rows.length > 0);
+  updateSortIndicators();
   tbody.querySelectorAll("[data-admin-edit]").forEach((button) => button.addEventListener("click", () => openAdminEdit(allRows.find((row) => row.id === button.dataset.adminEdit))));
 }
 
@@ -742,8 +1193,25 @@ function openAdminEdit(row) {
     const slot = form.querySelector(`[data-line-slot="${name}"]`);
     slot.innerHTML = lineFieldMarkup(name, row[name]);
   }
-  form.elements.assigned_designer.innerHTML = '<option value="">Any</option>' + users.filter((user) => user.role === "designer" && user.active).map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.full_name)}</option>`).join("");
-  form.elements.assigned_designer.value = row.assigned_designer || "";
+  form.querySelector('[data-branding-slot="branding_details"]').innerHTML = brandingFieldMarkup(row.branding_details);
+  const activeDesigners = users.filter((user) => user.role === "designer" && user.active);
+  const preferredSelect = form.elements.preferred_designer;
+  preferredSelect.innerHTML = '<option value="">Any</option>'
+    + (row.preferred_designer_recorded === false ? '<option value="__unknown">Not recorded (historical)</option>' : "")
+    + activeDesigners.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.full_name)}</option>`).join("");
+  if (row.preferred_designer && !activeDesigners.some((user) => user.id === row.preferred_designer)) {
+    const previousPreference = users.find((user) => user.id === row.preferred_designer);
+    preferredSelect.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(row.preferred_designer)}">${escapeHtml(previousPreference?.full_name || "Inactive designer")} (inactive)</option>`);
+  }
+  preferredSelect.value = row.preferred_designer_recorded === false ? "__unknown" : row.preferred_designer || "";
+  const assignedSelect = form.elements.assigned_designer;
+  assignedSelect.innerHTML = '<option value="">Any / unassigned</option>'
+    + activeDesigners.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.full_name)}</option>`).join("");
+  if (row.assigned_designer && !activeDesigners.some((user) => user.id === row.assigned_designer)) {
+    const previousDesigner = users.find((user) => user.id === row.assigned_designer);
+    assignedSelect.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(row.assigned_designer)}">${escapeHtml(previousDesigner?.full_name || "Inactive designer")}</option>`);
+  }
+  assignedSelect.value = row.assigned_designer || "";
   document.querySelector("#admin-edit-dialog").showModal();
 }
 
@@ -760,13 +1228,23 @@ async function saveAdminEdit(event) {
       if (!lines.length) throw new Error(`${lineFieldTitles[name]} must contain at least one non-empty line.`);
       lineValues[name] = lines;
     }
+    const brandingDetails = normalizeBrandingDetails(data.get("branding_details"))
+      .map((line) => Object.fromEntries(Object.entries(line).map(([key, value]) => [key, String(value).trim()])));
+    if (!brandingDetails.length || brandingDetails.some((line) => !line.mode
+      || Object.values(line).some((value) => value.length > 200))) {
+      throw new Error("Add at least one branding line, choose a mode for each line, and keep each field to 200 characters or fewer.");
+    }
+    const preferenceRecorded = data.get("preferred_designer") !== "__unknown";
+    const preferredDesigner = preferenceRecorded ? data.get("preferred_designer") || null : null;
     const { error } = await client.from("artwork_requests").update({
       category: data.get("category"), client_name: data.get("client_name"), so_number: data.get("so_number"),
-      ...lineValues, pantone_code: data.get("pantone_code") || null,
-      branding_size: String(data.get("branding_size") || "").trim() || null,
+      ...lineValues, branding_details: brandingDetails,
       high_res_logo: data.has("high_res_logo"), redesign_logo: data.has("redesign_logo"),
       additional_info: data.get("additional_info") || null,
-      assigned_designer: data.get("assigned_designer") || null, status: data.get("status"),
+      preferred_designer: preferredDesigner,
+      preferred_designer_recorded: preferenceRecorded,
+      assigned_designer: data.get("assigned_designer") || null,
+      status: data.get("status"),
       date_needed: data.get("date_needed"), designer_notes: data.get("designer_notes") || null
     }).eq("id", data.get("id"));
     if (error) throw error;
@@ -799,9 +1277,18 @@ async function deleteArtwork(event) {
 }
 
 function exportCsv() {
-  const columns = ["ref_no","sr","created_at","created_month","created_by","assigned_designer","category","client_name","so_number","product","branding_mode","logo_position","pantone_code","branding_size","high_res_logo","redesign_logo","additional_info","date_needed","status","claimed_at","done_at","done_by","designer_notes","change_count","changes_done","updated_at"];
-  const csvValue = (row, column) => ["created_by", "assigned_designer", "done_by"].includes(column)
-    ? profileName(row[column]) : lineFieldNames.includes(column) ? linesFromValue(row[column]).join(" | ") : row[column];
+  const columns = ["ref_no","sr","created_at","created_month","created_by","preferred_designer","assigned_designer","category","client_name","so_number","product","branding_details","high_res_logo","redesign_logo","additional_info","date_needed","status","claimed_at","done_at","done_by","designer_notes","change_count","changes_done","updated_at"];
+  const brandingCsvValue = (details) => normalizeBrandingDetails(details).map((line) =>
+    [["Logo", line.logo], ["Mode", line.mode], ["Pantone", line.pantone], ["Size", line.size], ["Position", line.position]]
+      .filter(([, value]) => value)
+      .map(([label, value]) => `${label}: ${value}`)
+      .join("; ")
+  ).join(" | ");
+  const csvValue = (row, column) => column === "preferred_designer"
+    ? preferredDesignerName(row)
+    : ["created_by", "assigned_designer", "done_by"].includes(column) ? profileName(row[column])
+    : column === "branding_details" ? brandingCsvValue(row.branding_details)
+      : lineFieldNames.includes(column) ? linesFromValue(row[column]).join(" | ") : row[column];
   const csvCell = (value) => {
     const safeValue = /^[=+\-@]/.test(String(value ?? "")) ? `'${value}` : value;
     return `"${String(safeValue ?? "").replaceAll('"', '""')}"`;
