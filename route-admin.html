@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="application-name" content="Workspace"><title>Route admin | Promo Kings Workspace</title><link rel="icon" href="images/promo-kings-logo.svg"><link rel="stylesheet" href="css/styles.css"><link rel="stylesheet" href="css/polish.css"></head>
+<body>
+  <header id="app-header" class="topbar"></header>
+  <main class="page">
+    <div class="page-heading"><div><p class="eyebrow">ROUTE ADMIN WORKSPACE</p><h1>Route admin</h1><p class="muted">Review, assign and track rider requests.</p></div></div>
+    <section class="panel"><div class="section-heading"><h2>My activity</h2><label class="inline-label">Period<select id="route-period"><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></select></label></div><div id="route-tallies" class="stats-grid"></div></section>
+    <section class="panel" id="route-admin-panel">
+      <div class="section-heading"><h2>Rider requests</h2><span id="rider-job-count" class="muted"></span></div>
+      <div class="toolbar"><select id="route-status-filter" aria-label="Filter rider requests by status"><option value="">All statuses</option><option>Not started</option><option>Started</option><option>In progress</option><option>Finished</option><option>Declined</option></select><input id="route-search" placeholder="Search reference or client"><button type="button" class="secondary hidden" id="route-more">Load more</button></div>
+      <div class="table-wrap"><table><thead><tr><th>SR / Ref</th><th>Salesperson</th><th>Client / contact</th><th>Address / details</th><th>Type</th><th>Expected</th><th>Requested</th><th>Rider</th><th>Rider time</th><th>Status</th><th>Action</th></tr></thead><tbody id="route-rider-rows"></tbody></table></div>
+      <p id="route-rider-empty" class="empty-state hidden">No rider requests found.</p>
+    </section>
+    <section class="panel hidden" id="route-riders-panel"><div class="section-heading"><h2>Riders</h2></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Status</th></tr></thead><tbody id="route-riders-rows"></tbody></table></div></section>
+    <section class="panel hidden" id="rider-request-panel"></section>
+    <section class="panel hidden" id="riders-list-panel"></section>
+  </main>
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
+  <script src="config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script type="module" src="js/app.js"></script>
+</body>
+</html>

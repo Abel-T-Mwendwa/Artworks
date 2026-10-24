@@ -57,6 +57,9 @@ Deno.serve(async (request) => {
         p_user_id: authData.user.id, p_password: password, p_key: encryptionKey
       });
       if (credentialError) throw credentialError;
+      const { error: profileUpdateError } = await service.from("profiles")
+        .update({ password_change_required: false }).eq("id", authData.user.id);
+      if (profileUpdateError) throw profileUpdateError;
       return response({ ok: true });
     }
     if (!actor?.active || actor.role !== "admin") return response({ error: "Administrator access is required." }, 403);
@@ -66,10 +69,12 @@ Deno.serve(async (request) => {
       const fullName = typeof body.full_name === "string" ? body.full_name.trim() : "";
       const password = typeof body.password === "string" ? body.password : "";
       const role = body.role;
+      const routeAdminAccess = role === "route_admin" || body.route_admin_access === true;
       if (password.length < 8) return response({ error: "Password must contain at least 8 characters." }, 400);
       if (password.length > 1024) return response({ error: "Password is too long." }, 400);
       if (!/^[A-Za-z0-9._-]{1,64}$/.test(username) || !fullName || fullName.length > 160
-        || !["salesperson", "designer", "admin"].includes(role)) {
+        || (body.route_admin_access !== undefined && typeof body.route_admin_access !== "boolean")
+        || !["salesperson", "designer", "admin", "production", "dispatch", "route_admin", "rider"].includes(role)) {
         return response({ error: "Enter a valid name, username, and role." }, 400);
       }
       const email = `${username.toLowerCase()}@promokings.local`;
@@ -79,7 +84,8 @@ Deno.serve(async (request) => {
       });
       if (createError || !created.user) return response({ error: createError?.message || "Could not create user." }, 400);
       const { error: profileError } = await service.from("profiles").insert({
-        id: created.user.id, username, full_name: fullName, role, active: true
+        id: created.user.id, username, full_name: fullName, role, active: true,
+        route_admin_access: routeAdminAccess, password_change_required: true
       });
       if (profileError) {
         const { error: rollbackError } = await service.auth.admin.deleteUser(created.user.id);
@@ -121,6 +127,9 @@ Deno.serve(async (request) => {
         p_user_id: userId, p_password: password, p_key: encryptionKey
       });
       if (credentialError) throw credentialError;
+      const { error: profileUpdateError } = await service.from("profiles")
+        .update({ password_change_required: true }).eq("id", userId);
+      if (profileUpdateError) throw profileUpdateError;
       return response({ ok: true });
     }
 
@@ -135,6 +144,17 @@ Deno.serve(async (request) => {
       });
       if (passwordError) throw passwordError;
       return response({ password });
+    }
+
+    if (body.action === "delete_user") {
+      const userId = typeof body.user_id === "string" ? body.user_id : "";
+      if (!userId) return response({ error: "A user is required." }, 400);
+      const { error: deleteError } = await service.rpc("admin_delete_user", {
+        p_target_user_id: userId,
+        p_actor_id: authData.user.id
+      });
+      if (deleteError) throw deleteError;
+      return response({ ok: true });
     }
 
     return response({ error: "Unsupported admin action." }, 400);

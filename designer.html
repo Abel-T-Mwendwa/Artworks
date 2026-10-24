@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Design | Promo Kings Artwork Tracker</title><link rel="icon" href="images/promo-kings-logo.svg"><link rel="stylesheet" href="css/styles.css"><link rel="stylesheet" href="css/polish.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="application-name" content="Workspace"><title>Design | Promo Kings Workspace</title><link rel="icon" href="images/promo-kings-logo.svg"><link rel="stylesheet" href="css/styles.css"><link rel="stylesheet" href="css/polish.css"></head>
 <body>
-  <header class="topbar"><a class="wordmark" href="designer.html"><img class="company-logo" src="images/promo-kings-logo.svg" alt="Promo Kings logo" hidden></a><button class="mobile-menu-button" type="button" data-menu-toggle aria-expanded="false">Menu</button><div class="top-actions"><button id="change-bell" class="quiet" aria-label="Open change requests">♧ Changes <b id="change-count">0</b></button><button id="assignment-bell" class="quiet" aria-label="Open new assignments">New assignments <b id="assignment-count">0</b></button><span id="current-user"></span><button class="quiet" data-logout>Log out</button></div></header>
+  <header id="app-header" class="topbar"></header>
   <main class="page">
     <div class="page-heading"><div><p class="eyebrow">DESIGN WORKSPACE</p><h1>Work queue</h1><p class="muted">Claim a job to start work and keep its sales team informed.</p></div></div>
-    <section class="panel"><div id="designer-tallies" class="stats-grid"></div></section>
+    <section class="panel"><div class="section-heading"><h2>My activity</h2><label class="inline-label">Period<select id="designer-period"><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></select></label></div><div id="designer-tallies" class="stats-grid"></div></section>
     <section class="panel"><div class="section-heading"><h2>Artwork queue</h2><select id="designer-filter"><option value="">All jobs</option><option value="today">Needed today</option><option value="tomorrow">Needed tomorrow</option><option value="pending">Pending</option><option value="done">Done</option><option value="changes">Change requests</option><option value="assignments">New assignments</option></select></div>
       <div id="assignment-banner" class="notice assignment-notice hidden"></div>
       <div id="change-banner" class="notice hidden"></div>

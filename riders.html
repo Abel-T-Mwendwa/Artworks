@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="application-name" content="Workspace"><title>Riders | Promo Kings Workspace</title><link rel="icon" href="images/promo-kings-logo.svg"><link rel="stylesheet" href="css/styles.css"><link rel="stylesheet" href="css/polish.css"></head>
+<body>
+  <header id="app-header" class="topbar"></header>
+  <main class="page">
+    <div class="page-heading"><div><p class="eyebrow">RIDER WORKSPACE</p><h1>Rider requests</h1><p class="muted">Request and coordinate pickups and dropoffs.</p></div></div>
+    <section class="panel"><div class="section-heading"><h2>My activity</h2><label class="inline-label">Period<select id="rider-period"><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></select></label></div><div id="rider-tallies" class="stats-grid"></div></section>
+    <section class="panel" id="rider-request-panel">
+      <div class="section-heading"><h2>New rider request</h2></div>
+      <form id="rider-request-form" class="request-form form-grid">
+        <label>Client<input name="client_name" maxlength="160" required></label>
+        <label>Contact<input name="contact_name" maxlength="160" required></label>
+        <label>Number<input name="contact_number" type="tel" maxlength="32" required placeholder="+254 700 000 000"></label>
+        <label>Address<input name="address" maxlength="240" required placeholder="Place, Town, County"></label>
+        <label>Type<select name="job_type" required><option value="">Choose type</option><option>Pickup</option><option>Dropoff</option></select></label>
+        <label>Details<input name="details" maxlength="500" required></label>
+        <label>Date<input name="scheduled_date" type="date" required></label>
+        <label>Expected time<select name="expected_time" required><option value="">Choose expected time</option></select><small id="rider-request-slot-hint" class="muted" aria-live="polite"></small></label>
+        <p id="rider-request-time-message" class="form-message wide" role="alert" aria-live="assertive"></p>
+        <div class="form-actions wide"><button type="reset" class="quiet">Discard</button><button type="submit" class="primary">Request</button></div>
+      </form>
+    </section>
+    <section class="panel" id="route-admin-panel">
+      <div class="section-heading"><h2>Rider requests</h2><span id="rider-job-count" class="muted"></span></div>
+      <div class="toolbar"><input id="route-search" placeholder="Search reference, client or address"><button type="button" class="secondary hidden" id="route-more">Load more</button></div>
+      <div class="table-wrap"><table><thead><tr><th>SR / Ref</th><th>Client / contact</th><th>Address / details</th><th>Type</th><th>Expected</th><th>Rider</th><th>Rider time</th><th>Status</th><th>Action</th></tr></thead><tbody id="route-rider-rows"></tbody></table></div>
+      <p id="route-rider-empty" class="empty-state hidden">No rider requests found.</p>
+    </section>
+    <section class="panel" id="riders-list-panel">
+      <div class="section-heading"><h2>My rider requests</h2><select id="sales-rider-filter" aria-label="Filter rider requests"><option value="">All requests</option><option>Not started</option><option>Started</option><option>In progress</option><option>Finished</option><option>Declined</option></select></div>
+      <div class="table-wrap"><table><thead><tr><th>Ref</th><th>Client / contact</th><th>Address / details</th><th>Type</th><th>Expected</th><th>Rider</th><th>Rider time</th><th>Status</th></tr></thead><tbody id="sales-rider-rows"></tbody></table></div>
+      <button type="button" class="secondary hidden" id="sales-rider-more">Load more</button>
+      <p id="sales-rider-empty" class="empty-state hidden">No rider requests yet.</p>
+    </section>
+    <section class="panel hidden" id="route-riders-panel">
+      <div class="section-heading"><h2>Riders</h2></div>
+      <div class="table-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Status</th></tr></thead><tbody id="route-riders-rows"></tbody></table></div>
+    </section>
+  </main>
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
+  <script src="config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script type="module" src="js/app.js"></script>
+</body>
+</html>

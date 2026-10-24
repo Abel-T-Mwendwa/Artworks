@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sales | Promo Kings Artwork Tracker</title><link rel="icon" href="images/promo-kings-logo.svg"><link rel="stylesheet" href="css/styles.css"><link rel="stylesheet" href="css/polish.css">
+  <meta name="application-name" content="Workspace"><title>Sales | Promo Kings Workspace</title><link rel="icon" href="images/promo-kings-logo.svg"><link rel="stylesheet" href="css/styles.css"><link rel="stylesheet" href="css/polish.css">
 </head>
 <body>
-  <header class="topbar"><a class="wordmark" href="sales.html" aria-label="Promo Kings home"><img class="company-logo" src="images/promo-kings-logo.svg" alt="Promo Kings logo" hidden></a><button class="mobile-menu-button" type="button" data-menu-toggle aria-expanded="false">Menu</button><div class="top-actions"><span id="current-user"></span><button class="quiet" data-logout>Log out</button></div></header>
+  <header id="app-header" class="topbar"></header>
   <main class="page">
     <div class="page-heading"><div><p class="eyebrow">SALES WORKSPACE</p><h1>Artwork requests</h1><p class="muted">Track artwork and request changes from your team.</p></div></div>
     <section class="panel">
-      <div class="section-heading"><h2>My activity</h2><label class="inline-label">Period<select id="sales-period"><option value="day">Day</option><option value="month">Month</option><option value="year">Year</option></select></label></div>
+      <div class="section-heading"><h2>My activity</h2><label class="inline-label">Period<select id="sales-period"><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></select></label></div>
       <div id="sales-tallies" class="stats-grid"></div>
     </section>
     <section class="panel">

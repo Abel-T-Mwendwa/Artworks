@@ -1,7 +1,7 @@
 
-<<<<<<< HEAD
-=======
-A static, role-based artwork request tracker. The front end is plain HTML, CSS, and JavaScript, hosted on GitHub Pages; Supabase provides Auth, Postgres/RLS, Realtime, and the two Edge Functions. There is no application server.
+# Workspace
+
+A static, role-based app for artwork requests, deliveries, and riders. The front end is plain HTML, CSS, and JavaScript, hosted on GitHub Pages; Supabase provides Auth, Postgres/RLS, Realtime, and the two Edge Functions. There is no application server.
 
 ## Assumptions
 
@@ -10,7 +10,7 @@ A static, role-based artwork request tracker. The front end is plain HTML, CSS, 
 - The migration provisions the initial `IT` admin account in Supabase Auth. The first authenticated session must change the initial password.
 - Dates and reporting periods use `Africa/Nairobi`.
 - Password viewing is retained because it was requested. Passwords are encrypted with a Supabase Edge Function secret and are only decrypted after an admin check; each view is audited.
- Run locally
+## Run locally
 
 The front end is static, but login and app data still need a configured Supabase project and deployed Edge Functions.
 
@@ -29,30 +29,37 @@ Do not open `index.html` as a `file://` URL; browser module loading and Supabase
 
 ## Project contents
 
-- `index.html`, `sales.html`, `designer.html`, `admin.html`: role entry pages. Direct access to a role page is checked against the authenticated profile and is also restricted by RLS.
+- `index.html`, `home.html`, `sales.html`, `designer.html`, `admin.html`, `users.html`, `deliveries.html`, `riders.html`, `route-admin.html`, `vehicles.html`, `my-jobs.html`: sign-in and role workspaces. Shared role-aware navigation and Home behavior are in `js/portal.js`; page access is checked against the authenticated profile and data access is also restricted by RLS.
 - `config.js`: public Supabase project URL and anon key only.
 - `js/`: login and dashboard behavior.
 - `supabase/migrations/20261020000000_artwork_tracker.sql`: schema, atomic reference allocation, triggers, RLS, seed sizes, initial admin, and Realtime publication setup.
+- `supabase/migrations/20261021000000_branding_size_free_text.sql`, `20261022000000_request_detail_lines.sql`, and `20261023000000_branding_details_and_assignment_notifications.sql`: existing incremental artwork schema updates; run in order.
 - `supabase/migrations/20261023000001_queue_visibility_and_completed_at.sql`: designer queue read visibility and system-managed artwork completion timestamps.
+- `supabase/migrations/20261024000000_deliveries_riders_portal.sql`: additional roles, protected delivery and rider workflows, vehicle registry, portal notifications, and independent DL/RJ reference counters.
+- `supabase/migrations/20261025000000_route_admin_access.sql`: additive route-admin access and protected rider assignment permissions.
+- `supabase/migrations/20261026000000_password_reminders_and_live_portal.sql`: temporary-password profile state, idempotent Realtime publication setup, route-admin decline workflow and notifications, and non-blocking rider-slot conflict warnings.
 - `supabase/functions/login/`: username login and 5-failure/15-minute lockout.
 - `supabase/functions/user-admin/`: user creation, reset, password view/audit, and first-login password change.
 
 ## Deploy Supabase
 
 1. Create a Supabase project on the free tier and save its project URL and **anon/public** key from **Project Settings → API**.
-2. Open **SQL Editor**, paste and run `supabase/migrations/20261020000000_artwork_tracker.sql`. It creates the `IT` admin account with password `#Promoadm1n`, plus the branding-size options. The database stores only the Auth hash; the reversible encrypted password copy is saved after the admin completes the required first-login password change.
+2. Open **SQL Editor**, paste and run `supabase/migrations/20261020000000_artwork_tracker.sql`. It creates the `IT` admin account and branding-size options. Change the seeded admin password in Supabase Authentication before enabling public access; never publish the bootstrap credential. The database stores only the Auth hash; the reversible encrypted password copy is saved after the admin completes the required first-login password change.
 3. In **SQL Editor**, run `supabase/migrations/20261021000000_branding_size_free_text.sql` to keep existing branding-size values while removing the lookup constraint. The `branding_sizes` table is retained.
 4. In **SQL Editor**, run `supabase/migrations/20261022000000_request_detail_lines.sql` to convert the product, branding mode, and logo-position fields into arrays while preserving existing text as one-line arrays.
 5. In **SQL Editor**, run `supabase/migrations/20261023000000_branding_details_and_assignment_notifications.sql` to consolidate branding details into structured lines, preserve old values, record designer preference separately from claims, and enable assignment notifications.
 6. In **SQL Editor**, run `supabase/migrations/20261023000001_queue_visibility_and_completed_at.sql` to make the designer queue visible to all designers and track completion time.
-7. Install the Supabase CLI, authenticate, and link this project:
+7. In **SQL Editor**, run `supabase/migrations/20261024000000_deliveries_riders_portal.sql` to add the delivery and rider workspaces, roles, RLS, triggers, and notifications.
+8. In **SQL Editor**, run `supabase/migrations/20261025000000_route_admin_access.sql` to allow route-admin access to be added to another user role and prevent duplicate active rider time slots.
+9. In **SQL Editor**, paste and run `supabase/migrations/20261026000000_password_reminders_and_live_portal.sql` to persist temporary-password reminders, enable portal table Realtime, and support rider-request declines. It can be pasted again safely.
+10. Install the Supabase CLI, authenticate, and link this project:
 
    ```sh
    supabase login
    supabase link --project-ref YOUR_PROJECT_REF
    ```
 
-7. Generate a strong encryption key locally (do not add it to the repository), then set the Edge Function secret:
+11. Generate a strong encryption key locally (do not add it to the repository), then set the Edge Function secret:
 
    ```sh
    openssl rand -base64 48
@@ -61,16 +68,17 @@ Do not open `index.html` as a `file://` URL; browser module loading and Supabase
 
    Supabase supplies `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` to Edge Functions. Do not copy the service-role key into `config.js`, a GitHub repository, or any browser code.
 
-8. Deploy both functions from the repository root:
+12. Deploy the changed user-administration function from the repository root:
 
    ```sh
-   supabase functions deploy login --no-verify-jwt
    supabase functions deploy user-admin --no-verify-jwt
    ```
 
    The login function is public by necessity; it validates usernames, applies the database-backed lockout, and returns only a Supabase Auth session. `user-admin` validates the caller's JWT and active admin profile before any privileged operation.
-9. In Supabase **Authentication**, open **Providers** or **Sign In / Up** (the exact submenu may vary by dashboard version), then set **Password requirements / Minimum password length** to **8**.
-10. No email address or email verification is required from staff. The app creates Auth users as already confirmed with an internal `.local` alias; it does not send authentication emails.
+13. In Supabase **Authentication**, open **Providers** or **Sign In / Up** (the exact submenu may vary by dashboard version), then set **Password requirements / Minimum password length** to **8**.
+14. No email address or email verification is required from staff. The app creates Auth users as already confirmed with an internal `.local` alias; it does not send authentication emails.
+
+Route-admin access is an additional permission managed from the admin **Users** tab; it does not replace the user's existing role. The UI only improves navigation and convenience—Supabase RLS and database triggers enforce access.
 
 ## Deploy to GitHub Pages
 
@@ -92,7 +100,7 @@ Do not open `index.html` as a `file://` URL; browser module loading and Supabase
 4. Visit `https://YOUR_GITHUB_USER.github.io/YOUR_REPOSITORY/` and sign in with:
 
    - Username: `IT` (case-insensitive)
-   - Initial password: `#Promoadm1n`
+   - Use the bootstrap password supplied privately during setup; change it before public access.
 
 5. Complete the forced password change. The new password is encrypted in `user_credentials`; only an active admin can request a view, and every view is written to `audit_log`.
 6. Add designer and salesperson accounts from **User management**. Give each user their temporary password securely; every new or reset account must change it at first login.
@@ -145,4 +153,3 @@ Supabase Auth cannot reveal an existing password. This app stores an encrypted c
 - [ ] Edit and delete an artwork item; verify change history is removed with a deleted item.
 - [ ] Add a user, change roles, deactivate/reactivate, reset a password, and verify each new/reset password requires a first-login change.
 - [ ] View a user's password and verify a `password_viewed` record appears in `audit_log`.
->>>>>>> a06ee24 (changed the entry filed in both sales person  and the  desiner add one more field)

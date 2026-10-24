@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="application-name" content="Workspace"><title>Vehicles | Promo Kings Workspace</title><link rel="icon" href="images/promo-kings-logo.svg"><link rel="stylesheet" href="css/styles.css"><link rel="stylesheet" href="css/polish.css"></head>
+<body>
+  <header id="app-header" class="topbar"></header>
+  <main class="page">
+    <div class="page-heading"><div><p class="eyebrow">DISPATCH WORKSPACE</p><h1>Vehicles</h1><p class="muted">Manage company vehicles used for deliveries.</p></div></div>
+    <section class="panel"><div class="section-heading"><h2>My activity</h2><label class="inline-label">Period<select id="vehicle-period"><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></select></label></div><div id="vehicle-tallies" class="stats-grid"></div></section>
+    <section class="panel"><h2>Register vehicle</h2>
+      <form id="vehicle-form" class="form-grid">
+        <input type="hidden" name="id">
+        <label>Registration number<input name="registration_number" maxlength="32" required></label>
+        <label>Description or type<input name="description" maxlength="120" required></label>
+        <label class="check-line"><input type="checkbox" name="active" checked> Active</label>
+        <div class="form-actions"><button type="button" class="quiet" id="vehicle-clear">Clear</button><button class="primary" type="submit">Save vehicle</button></div>
+      </form>
+    </section>
+    <section class="panel"><div class="table-wrap"><table><thead><tr><th>Registration</th><th>Description / type</th><th>Status</th><th>Actions</th></tr></thead><tbody id="vehicle-rows"></tbody></table></div><p id="vehicle-empty" class="empty-state hidden">No vehicles registered.</p></section>
+  </main>
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
+  <script src="config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script type="module" src="js/app.js"></script>
+</body>
+</html>

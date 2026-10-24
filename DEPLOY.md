@@ -1,22 +1,23 @@
 
-<<<<<<< HEAD
-=======
 ## Deploy for the first time
 
 1. **Check the project configuration.** Open `config.js` and confirm it contains only the Supabase Project URL and the anon/publishable key. Never put a `service_role` key or other secret in browser code. Confirm there is no `.env` file containing secrets in the project folder. The included `.gitignore` excludes `.env` files and `node_modules`. The logo path is relative in the HTML pages.
 
-2. **Back up the artwork data, then run database updates.** In the Supabase dashboard, open **Table Editor → artwork_requests** and export the table as CSV before changing the database. Open **SQL Editor** and run any new files in `supabase/migrations` in filename order:
+2. **Back up app data, then run database updates.** In the Supabase dashboard, export the affected tables before changing the database. Open **SQL Editor** and run unapplied files in `supabase/migrations` in filename order:
+   - `20261020000000_artwork_tracker.sql` (only for a new project)
    - `20261021000000_branding_size_free_text.sql`
    - `20261022000000_request_detail_lines.sql`
    - `20261023000000_branding_details_and_assignment_notifications.sql`
    - `20261023000001_queue_visibility_and_completed_at.sql`
+   - `20261024000000_deliveries_riders_portal.sql`
+   - `20261025000000_route_admin_access.sql`
+   - `20261026000000_password_reminders_and_live_portal.sql`
    
-   Do not rerun migrations that have already been applied.
+   The newest migration is safe to paste again. Do not rerun earlier migrations that have already been applied.
 
-3. **Redeploy the changed Edge Functions.** Open a terminal in the project folder with the Supabase CLI installed and the project linked, then run:
+3. **Redeploy the changed user administration Edge Function.** Open a terminal in the project folder with the Supabase CLI installed and the project linked, then run:
 
    ```sh
-   supabase functions deploy login --no-verify-jwt
    supabase functions deploy user-admin --no-verify-jwt
    ```
 
@@ -29,7 +30,7 @@
    ```sh
    git init
    git add .
-   git commit -m "Deploy Artwork Tracker"
+   git commit -m "Deploy Workspace"
    git branch -M main
    git remote add origin https://github.com/USER/REPOSITORY.git
    git push -u origin main
@@ -86,7 +87,7 @@
 - [ ] Logged-out dashboard access redirects to login.
 - [ ] A user deactivated by an admin is blocked.
 
-3333 Salesperson
+### Salesperson
 
 - [ ] Required-field validation blocks incomplete requests; a past needed date is rejected.
 - [ ] Saving creates a server-generated reference number with an increasing sequence.
@@ -99,6 +100,8 @@
 - [ ] The change popup opens, validates, and submits a change request.
 - [ ] Tally cards update and the Day/Month/Year filter works.
 - [ ] A designer's Done update appears live.
+- [ ] Submit a delivery with multiple item lines; verify production receives a notification and can mark it Ready.
+- [ ] Submit a rider request; verify route admin assignment, rider slot, salesperson status updates, and rider notifications.
 
 ### Designer
 
@@ -112,11 +115,23 @@
 
 ### Admin
 
+- [ ] Create and assign salesperson, designer, production, dispatch, route_admin, rider, and admin roles.
 - [ ] Filters work and the CSV export contains the filtered requests.
 - [ ] Adding a user works; a duplicate username produces a clear message.
 - [ ] Role changes and deactivation/reactivation work.
+- [ ] Add Route admin access to a user with another role; verify the Riders tab appears while their existing tabs and permissions remain.
 - [ ] Password reset and password view work; viewing a password creates an `audit_log` entry.
 - [ ] Deleting a request removes it from the list.
+
+### Delivery and rider workflows
+
+- [ ] Salesperson, production, dispatch, route admin, rider, and admin see only permitted tabs and data.
+- [ ] Dispatch cannot dispatch before production marks Ready; verify Client and Company transport and active vehicle selection.
+- [ ] Mark a delivery Delivered and verify its timestamp and salesperson notification.
+- [ ] Confirm one rider cannot start a second job while another is in progress; finish a job and verify the mission overlay and status notification.
+- [ ] Try assigning two active jobs to the same rider and hourly slot; the database must reject the duplicate even if two route admins submit simultaneously.
+- [ ] Verify the new rider assignment dialog blocks the rider until OK and marks the assignment notification read.
+- [ ] Verify new portal notifications are unique, role-targeted, and can be marked read.
 
 ### Phone testing
 
@@ -132,4 +147,3 @@
 ### Live smoke test after deployment
 
 - [ ] Sign in as `IT`, add a test request, claim and finish it as a designer, then delete the test data.
->>>>>>> a06ee24 (changed the entry filed in both sales person  and the  desiner add one more field)

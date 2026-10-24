@@ -4,7 +4,10 @@ const client = window.supabase.createClient(window.APP_CONFIG.supabaseUrl, windo
 const form = document.querySelector("#login-form");
 const message = document.querySelector("#login-message");
 
-const routes = { salesperson: "sales.html", designer: "designer.html", admin: "admin.html" };
+const routes = {
+  salesperson: "home.html", designer: "home.html", admin: "home.html",
+  production: "home.html", dispatch: "home.html", route_admin: "home.html", rider: "home.html"
+};
 const LOGIN_AT_KEY = "loginAt";
 const SESSION_DURATION_MS = 24 * 60 * 60 * 1000;
 
@@ -102,6 +105,7 @@ form.addEventListener("submit", async (event) => {
     if (!sessionData.session) throw new Error("The new session could not be restored. Please try again.");
     try {
       localStorage.setItem(LOGIN_AT_KEY, String(Date.now()));
+      localStorage.removeItem(`passwordChangeDismissed:${sessionData.session.user.id}`);
     } catch (storageError) {
       console.error("Could not save the session timestamp.", storageError);
       const { error: signOutError } = await client.auth.signOut();
